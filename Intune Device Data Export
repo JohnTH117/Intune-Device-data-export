@@ -1,0 +1,61 @@
+#Command Line Passed Variables
+[CmdletBinding()]
+param (
+       [Parameter(Mandatory = $true)]
+       [string]$ExportFileName,
+       [Parameter(Mandatory = $true)]
+       [string]$WorkingFolder
+)
+Start-Transcript -Path "$WorkingFolder\PowerShellScript.log"
+
+#
+Import-Module Microsoft.Graph.DeviceManagement
+Connect-Mggraph -Scopes "DeviceManagementManagedDevices.ReadWrite.All"
+#
+##
+###
+#Retrieving Windows Devices Only from Intune
+$listIntuneDevices = Get-MgDeviceManagementManagedDevice -all | Where-Object { (($_.OperatingSystem -match "iOS") -and ($_.DeviceName -match "Shared")) }
+
+#Goes through each of the Intune devices
+foreach ($d in $listIntuneDevices)
+{
+       $DeviceID = $d.id
+       $DeviceName = $d.DeviceName
+       $Category = $d.DeviceCategoryDisplayName
+       $enroll = $d.EnrolledDateTime
+       $lastsync = $d.LastSyncDateTime
+       $Model = $d.Model
+       #Retrieve the Notes
+       $CheckPrimaryApiUrl = "https://graph.microsoft.com/beta/deviceManagement/managedDevices/"+ $DeviceID + "?select=deviceName,notes"
+       $ApiResultsWithNotes = Invoke-MgGraphRequest -Uri $CheckPrimaryApiUrl -Method GET -ContentType 'application/json'
+       $notes = $ApiResultsWithNotes.notes
+       $DeviceName
+       $notes
+       $DeviceObject = [pscustomobject]@{
+             'DeviceName' = $DeviceName;
+             'Notes' = $notes;
+             'Category' = $Category;
+             'lastsync' = $lastsync;
+             'enrolled' = $enroll;
+             'Model' = $Model
+       }
+       
+       $DeviceObject | Export-Csv -Path $workingfolder\$ExportFileName -Append
+       #Ensures Variables are cleared
+       $DeviceObject = $null
+       $DeviceID = $null
+       $DeviceName = $null
+       $CheckPrimaryApiUrl = $null
+       $ApiResultsWithNotes = $null
+       $notes = $null
+       $Category = $null
+       $lastsync = $null
+       $enroll = $null
+       $Model = $null
+}
+###
+##
+#
+Disconnect-MgGraph
+Stop-Transcript
